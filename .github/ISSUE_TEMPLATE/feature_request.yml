@@ -1,0 +1,25 @@
+name: Feature or new skill
+description: Suggest a new skill, a port of another upstream piece, or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What decision should Jev make, and when?
+      description: Describe the typed question (yes/no, pick one of N, score) and where it fits in an agent's task.
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: What data would leave the machine?
+      description: Which fields would be sent to the Jev API, and how they are redacted or capped.
+  - type: textarea
+    id: fallback
+    attributes:
+      label: Fail-open behaviour
+      description: What should happen with no key, a timeout or a bad reply?
+  - type: textarea
+    id: other
+    attributes:
+      label: Anything else

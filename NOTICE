@@ -1,0 +1,108 @@
+grokbot-jev-skills
+Copyright (c) 2026 Alex Fallah
+
+This project is licensed under the MIT License (see LICENSE).
+
+Independence and trademarks
+===========================
+
+Jev and TypeSafe are products of TypeSafe AI. Grok Bot is a product of its maker. This
+project is independent and is not affiliated with, endorsed by or sponsored by TypeSafe AI,
+the maker of Grok Bot, or the authors of the upstream project below. Names are used only
+to describe what this project works with.
+
+The upstream CLI is not included
+================================
+
+This repository contains no code from the upstream project. `install.sh` downloads the
+upstream `jev` CLI (jevkit) from its own repository at install time, under its own licence.
+
+Adapted skill content
+=====================
+
+The ten skills in skills/ are adaptations for Grok Bot of skill documentation in:
+
+kerpopule/hermes-jev-skills (Hermes Jev Skills) - https://github.com/kerpopule/hermes-jev-skills
+Version adapted: 0.22.1 (commit a6f6344bae3411b2afaabd640dc28cda736e8894)
+
+What each skill here was adapted from, in upstream's skills/ folder, README.md and docs/:
+
+  jev-setup-grok        skills/jev-setup/SKILL.md, AGENTS.md, README.md ("Your API key never
+                        touches the agent", "Everything fails open")
+  jev-search-loop       skills/jev-search/SKILL.md, docs/search-loop.md
+  jev-social-research   skills/jev-social-research/SKILL.md
+  jev-passage-filter    skills/jev-memory/SKILL.md
+  jev-mailbox-sort      skills/jev-mailbox/SKILL.md
+  jev-support-triage    skills/jev-mailbox/SKILL.md (the triage comparison), README.md (Triage)
+  jev-routine-wake      the cron-wake decision policy description (jevkit/policies/cron-wake.json)
+  jev-typed-decision    skills/jev-frontier-work/SKILL.md (claim check), skills/jev-browser-use/SKILL.md
+                        (yes/no check), docs/writing-a-jev-question.md, the `jev ask --help` example
+  jev-choose-turns      skills/jev-compaction/SKILL.md
+  jev-watch-run         skills/jev-frontier-work/SKILL.md ("Watch the run")
+
+The "What leaves the machine" sections summarise upstream README.md "What leaves your
+machine". Example inputs and the documented output shapes were written and checked for this
+project by running the upstream CLI.
+
+Upstream licence, reproduced in full as it requires:
+
+MIT License
+
+Copyright (c) 2026 Steve Darlow
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Third-party portions listed in the upstream NOTICE
+==================================================
+
+Upstream's NOTICE lists three third-party MIT projects:
+  - fazlerocks/jevmail (the lane descriptions, urgency rubric, question instructions and
+    0.15 low-confidence threshold in jevkit/mailbox.py)
+  - savka777/jev-use (the plan-once design in jevkit/plan.py)
+  - rohanarun/computer-use-cache (two cache ideas in jevkit/memo.py and jevkit/plan.py)
+
+None of their text or code is copied into this repository. The computer-use features that
+draw on jev-use and computer-use-cache were not ported. jev-mailbox-sort names the five
+mailbox lanes (needs_reply, updates, promotional, sales, spam) that the upstream CLI
+classifies into; the lane descriptions themselves are not reproduced. Because the lane
+design comes from jevmail, its notice is carried here as a precaution:
+
+fazlerocks/jevmail - https://github.com/fazlerocks/jevmail
+
+MIT License
+
+Copyright (c) 2026 Fazle Rahman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

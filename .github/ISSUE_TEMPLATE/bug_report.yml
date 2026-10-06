@@ -1,0 +1,49 @@
+name: Bug report
+description: A skill, the installer or a verify tool behaves wrongly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste an API key, token or private email/message content here.** Redact the output first.
+        Security problems go through the Security tab ("Report a vulnerability"), not an issue.
+        Bugs inside the `jev` CLI itself belong upstream at kerpopule/hermes-jev-skills.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [install.sh, a skill, verify_skills.py / mock_jev.py, tests or CI, docs]
+    validations:
+      required: true
+  - type: input
+    id: skill
+    attributes:
+      label: Skill slug (if any)
+      placeholder: jev-search-loop
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands you ran, and the redacted output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Output of `bash install.sh --check` (it never prints a key), plus your OS and `python3 --version`.
+      render: text
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: I removed all keys, tokens and private data from this report.
+          required: true

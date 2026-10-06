@@ -1,0 +1,40 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Shell syntax and lint
+        run: |
+          bash -n install.sh
+          shellcheck install.sh
+      - name: Unit, skill and installer tests (no key, mock only)
+        env:
+          GJS_REQUIRE_NETWORK: "1"
+        run: python3 -m unittest discover -s tests -v
+      - name: Install the pinned jev CLI (no key, no skills)
+        run: |
+          bash install.sh --check
+          bash install.sh --no-skills
+          "$HOME/.local/bin/jev" --help > /dev/null
+      - name: Skill examples, no-key mode
+        run: python3 tools/verify_skills.py
+      - name: Skill examples, mock mode
+        run: python3 tools/verify_skills.py --mock

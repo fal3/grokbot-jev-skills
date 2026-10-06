@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bugs in the jev CLI itself
+    url: https://github.com/kerpopule/hermes-jev-skills/issues
+    about: The CLI is upstream; report CLI bugs there.
+  - name: Report a security vulnerability
+    url: https://github.com/fal3/grokbot-jev-skills/security/advisories/new
+    about: Please report security problems privately.
