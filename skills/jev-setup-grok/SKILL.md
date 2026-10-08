@@ -5,9 +5,11 @@ description: Use when installing, verifying, updating or fixing the `jev` CLI (T
 
 # Set up the Jev CLI for Grok Bot
 
-Jev is TypeSafe's decision model. It answers typed questions (pick one, score, yes/no) in about 0.4 s and never writes prose. The other `jev-*` skills reach it only through the `jev` CLI, which comes from the upstream project github.com/kerpopule/hermes-jev-skills (stdlib-only Python). Run everything below with Grok Bot's shell tool.
+Jev is TypeSafe's decision model. It answers typed questions (pick one, score, yes/no) rather than writing prose; latency depends on the provider and network. The other `jev-*` skills reach it only through the `jev` CLI, which comes from github.com/kerpopule/hermes-jev-skills (stdlib-only Python). Run everything below with Grok Bot's shell tool.
 
 ## 1. Check first
+
+Check the configured provider and the task's permission to make a live API call before using the example below: `doctor` sends a connectivity probe and may use provider credits. For installation or troubleshooting that must stay offline, use `doctor --offline` instead and report connectivity as unverified. Do not silently switch providers or billing accounts to make a check pass.
 
 ```bash
 command -v jev; ls -l "$HOME/.local/bin/jev"
@@ -24,7 +26,7 @@ command -v jev; ls -l "$HOME/.local/bin/jev"
  "hermes_home": null}
 ```
 
-Ready means `key.present: true`, `key.source: "environment"` and `jev.reachable: true`, with exit 0. Without a key it exits 1 and has no `jev` block. That is expected, not broken. `jev.error` can be `auth_failed`, `credits_exhausted`, `rate_limited`, `network` or `timeout`. `jev doctor --offline` checks only that a key is present and makes no network call. Ignore the `routing` block: model routing doesn't apply to Grok Bot.
+For the intended environment-key setup, ready means the authorized `key.provider`, `key.present: true`, `key.source: "environment"` and `jev.reachable: true`. Exit 0 alone does not prove reachability: with a key present, `doctor` can still exit 0 while `jev.reachable` is false. Without a key and without an endpoint override it exits 1 and has no `jev` block. `jev.error` can include `auth_failed`, `credits_exhausted`, `rate_limited`, `network` or `timeout`. `doctor --offline` reports credential/configuration state without an API probe; it does not authenticate the key. Check any `endpoint_override` against the authorized destination; a valid custom endpoint can be probed without a provider key and uses a separate proxy-credential flow. Ignore the `routing` block for Grok Bot model switching, but preserve any existing configuration.
 
 ## 2. Install (only if the binary is missing)
 
@@ -36,13 +38,13 @@ bash "$HOME/.local/share/grokbot-jev-skills/install.sh" --check   # preview, cha
 bash "$HOME/.local/share/grokbot-jev-skills/install.sh"           # install
 ```
 
-The launcher keeps jev's local decision ledger and spend counters in `~/.local/state/jev` instead of `~/.hermes`. It needs Python 3.9+ and git. `install.sh --uninstall` removes only what the installer created.
+The launcher defaults `HERMES_HOME` to `~/.local/state/jev` when unset, and respects an existing value; ledger-path overrides can move the log too. It needs Python 3.9+ and git. Uninstall removes unchanged managed files and clean checkouts whose ownership is known; it retains adopted checkouts, ambiguous legacy markers and any local work, including ignored files. Linked workflow files/directories are skipped even with `--force`.
 
 ## 3. The key: an environment variable, never the chat
 
-- The CLI reads the key from the process environment variable **`TYPESAFE_API_KEY`**. It checks there first, and that alone is enough: no keychain or credentials file is needed. (Its fallbacks are `secret-tool`, when installed, then `~/.config/jev/credentials`.)
+- The CLI reads **`TYPESAFE_API_KEY`** from the process environment first. That is enough; without it the CLI can consult macOS Keychain or Linux `secret-tool`, then `~/.config/jev/credentials` (or the configured XDG location). The installer itself does not read keys. Let the CLI report only presence/source; never inspect the underlying secrets yourself.
 - Ask the user to add the key as a Grok Bot secret or environment variable named `TYPESAFE_API_KEY`, so it reaches shell commands. **Never ask for the key in chat.** If they paste one anyway, don't repeat or store it, tell them to rotate it, and point them to the secret.
-- Other providers serve the same Jev with the same answers. Their keys go in `OPENROUTER_API_KEY`, `VENICE_API_KEY` or `OPENCODE_ZEN_API_KEY` (OpenCode Zen has a free tier). With no TypeSafe key, jev falls back to them in that order. **Caution:** an `OPENROUTER_API_KEY` set for some other purpose will then quietly be used for Jev calls. Set `JEV_PROVIDER=typesafe|openrouter|venice|zen` to pin one, and check `key.provider` in `doctor`.
+- Other providers expose Jev through the same typed interface; exact answers, availability and pricing can differ. Their environment keys are `OPENROUTER_API_KEY`, `VENICE_API_KEY` and `OPENCODE_ZEN_API_KEY`; they can also have stored credentials. Without a resolvable TypeSafe key, jev scans them in that order. **Caution:** a key supplied for another tool may be used for Jev. `JEV_PROVIDER=typesafe|openrouter|venice|zen` is only a preference: an unknown or keyless preference falls back to the normal scan. Check that `key.provider` in `doctor --offline` actually matches the authorized provider before any live call. If it does not, stop Jev calls and use local fallback; do not silently adopt another account. Check endpoint overrides separately.
 - Never `echo` the variable, never read secret or credential files to "check" it, and never put a key on a command line. `jev doctor` reports only whether it is present and its length.
 - Don't run `jev setup-key`. That flow is for desktops; for Grok Bot the key comes from the environment.
 
@@ -58,8 +60,8 @@ After an update, re-run one example from each jev skill you rely on, because out
 
 ## Local state and spend brake
 
-The policy commands (`jev decide`, `score`, `route-to`, `triage --preset`, `batch`) append decisions only, with no prompt text, to `$HERMES_HOME/logs/jev-ledger.jsonl`. They also keep a rate and spend counter in `$HERMES_HOME/jev/`, with a default cap of $1.00/day; once the cap is hit, live calls take their fallback. `jev ledger --total` shows spend. The launcher sets `$HERMES_HOME` to `~/.local/state/jev`.
+Policy commands (`decide`, `score`, `route-to`, non-support `triage --preset`, `batch`) record decisions without state or question text in the local ledger; caller-defined policy/feature/action identifiers are retained, so keep them public. The default path is `$HERMES_HOME/logs/jev-ledger.jsonl`, but it can be moved/disabled. Policy counters normally live under `$HERMES_HOME/jev/` with a $1/day **estimated** default brake. Missing token counts, concurrent calls, disabled limits or inaccessible counters can bypass/undercount it; it is not a provider billing cap. `search`, `rerank`, `mail`, support `triage`, `compact-select`, `supervise`, raw `ask` and live `doctor` probes bypass that limiter. Bound calls and use provider-side budget controls where needed. `jev ledger --total` reports the policy ledger estimate, not all account charges.
 
-## Everything fails open
+## Fallbacks and errors
 
-No key, a timeout, a rate limit or a malformed reply never blocks. Every decision command the jev skills use (`search`, `rerank`, `mail`, `triage`, `compact-select`, `supervise`, `decide`, `route-to`, `score`) exits 0 with a usable fallback answer, and each skill says what that fallback is. Two commands behave differently: `jev ask` returns `{"error": code}` with exit 2, and `jev doctor` exits 1 when there is no key. Never stall a task waiting on Jev.
+Decision commands are intended to fail open when Jev is unavailable, and each skill says what its fallback is. Check the actual exit code and parsed output before using it: malformed local input or an unexpected runtime failure supplies no usable decision. `jev ask` returns `{"error": code}` with exit 2, and `jev doctor` exits 1 when there is no key and no valid endpoint override. Continue through the caller's authorized local fallback, preserving all existing approval and safety requirements; do not wait indefinitely for Jev.

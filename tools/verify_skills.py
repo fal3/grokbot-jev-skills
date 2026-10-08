@@ -2,13 +2,15 @@
 """Run every ```bash block in every skill and check the documented output shapes.
 
 Modes:
-  (default)  no key: every provider key and endpoint override is stripped from the
-             environment, so each command takes its documented fail-open path.
+  (default)  no key: provider keys, stored credential lookup and external network
+             access are disabled, so each command takes its fail-open path.
   --mock     same, plus TYPESAFE_BASE_URL pointed at tools/mock_jev.py on a free local
              port, so each command takes its success path with fake, deterministic answers.
 
 Blocks that install or update (they contain `git ` or `install.sh`) are skipped.
-The skills call "$HOME/.local/bin/jev"; pass --home DIR to use a jev installed under DIR.
+The skills call "$HOME/.local/bin/jev"; pass --home DIR to select that installed launcher.
+Each run uses a temporary HOME, config, state and example-file directory. Only trusted
+skill examples should be run: the Python guard is not a sandbox for arbitrary shell code.
 
 Usage: python3 tools/verify_skills.py [--mock] [--home DIR] [--skills DIR]
 Exit 0 when every check passes.
@@ -17,15 +19,20 @@ import argparse
 import json
 import os
 import re
-import socket
 import subprocess
 import sys
-import time
+import tempfile
+import threading
 from pathlib import Path
+
+from http.server import ThreadingHTTPServer
+from mock_jev import Handler
 
 REPO = Path(__file__).resolve().parents[1]
 STRIP = ("TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "VENICE_API_KEY", "OPENCODE_ZEN_API_KEY",
-         "TYPESAFE_BASE_URL", "JEV_PROXY_API_KEY", "JEV_PROVIDER", "TYPESAFE_MODEL")
+         "TYPESAFE_BASE_URL", "JEV_PROXY_API_KEY", "JEV_PROVIDER", "TYPESAFE_MODEL",
+         "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "BASH_ENV", "ENV",
+         "JEV_LEDGER_PATH", "JEV_ROUTING_CONFIG", "JEV_LEDGER", "JEV_LIMITS")
 
 
 def objects(text):
@@ -155,10 +162,31 @@ PRELUDE = {
 }
 
 
-def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+def offline_environment(work, launcher, port=0):
+    """Never let a check consult the real user's keys or write their Jev state."""
+    home = work / "home"
+    bin_dir = home / ".local" / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "jev").symlink_to(launcher)
+    guard_dir = work / "python-guard"
+    guard_dir.mkdir()
+    (guard_dir / "sitecustomize.py").write_text((REPO / "tools" / "offline_guard.py").read_text())
+    env = {k: v for k, v in os.environ.items() if k not in STRIP}
+    env.update(HOME=str(home), XDG_CONFIG_HOME=str(work / "config"),
+               XDG_CACHE_HOME=str(work / "cache"), TMPDIR=str(work),
+               XDG_STATE_HOME=str(work / "state"), HERMES_HOME=str(work / "state"),
+               PYTHONPATH=str(guard_dir), GJS_OFFLINE_PORT=str(port),
+               PATH=str(bin_dir) + os.pathsep + env.get("PATH", os.defpath))
+    # A stale inherited marker must not claim that a startup guard actually loaded.
+    env.pop("GJS_OFFLINE_GUARD_ACTIVE", None)
+    if port:
+        env["TYPESAFE_BASE_URL"] = f"http://127.0.0.1:{port}"
+    return env
+
+
+def example_command(skill, block, work):
+    """Keep the examples' fixed /tmp files private to this block/run."""
+    return (PRELUDE.get(skill, "") + block).replace("/tmp/", str(work) + "/")
 
 
 def main():
@@ -168,57 +196,68 @@ def main():
     parser.add_argument("--skills", default=str(REPO / "skills"))
     args = parser.parse_args()
 
-    env = {k: v for k, v in os.environ.items() if k not in STRIP}
-    if args.home:
-        env["HOME"] = args.home
-    jev = Path(env.get("HOME", "~")).expanduser() / ".local" / "bin" / "jev"
+    jev = Path(args.home or os.environ.get("HOME", "~")).expanduser() / ".local" / "bin" / "jev"
     if not jev.exists():
         print(f"FAIL: {jev} not found; install first (bash install.sh) or pass --home")
         return 1
 
+    jev = jev.absolute()
     mock = None
     if args.mock:
-        port = free_port()
-        mock = subprocess.Popen([sys.executable, str(REPO / "tools" / "mock_jev.py"), str(port)],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(50):
-            try:
-                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-                break
-            except OSError:
-                time.sleep(0.1)
-        env["TYPESAFE_BASE_URL"] = f"http://127.0.0.1:{port}"
+        # Bind port 0 once and keep the socket; free_port()+Popen had a bind race.
+        mock = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=mock.serve_forever, daemon=True).start()
 
     failures = passes = 0
     try:
-        for path in sorted(Path(args.skills).glob("*/SKILL.md")):
-            skill = path.parent.name
-            blocks = [b for b in re.findall(r"```bash\n(.*?)```", path.read_text(), re.S)
-                      if "git " not in b and "install.sh" not in b]
-            checks = CHECKS.get(skill)
-            if checks is None:
-                print(f"FAIL {skill}: no checks defined")
-                failures += 1
-                continue
-            if len(blocks) != len(checks):
-                print(f"FAIL {skill}: {len(blocks)} runnable blocks but {len(checks)} checks")
-                failures += 1
-                continue
-            for index, (block, pair) in enumerate(zip(blocks, checks)):
-                check = pair[1] if args.mock else pair[0]
-                proc = subprocess.run(["bash", "-c", PRELUDE.get(skill, "") + block], capture_output=True,
-                                      text=True, env=env, cwd="/tmp", timeout=120)
-                try:
-                    check(objects(proc.stdout), proc.returncode)
-                    passes += 1
-                    print(f"PASS {skill} block {index} (exit {proc.returncode})")
-                except Exception as error:  # noqa: BLE001 - report every failure, keep going
+        with tempfile.TemporaryDirectory(prefix="gjs-verify-") as directory:
+            work = Path(directory)
+            env = offline_environment(work, jev, mock.server_port if mock else 0)
+            guard_check = subprocess.run(["python3", "-c", "import os; assert os.environ.get('GJS_OFFLINE_GUARD_ACTIVE') == '1'"],
+                                         env=env, capture_output=True, text=True, timeout=10)
+            if guard_check.returncode:
+                print("FAIL: offline Python guard could not be loaded")
+                return 1
+            paths = sorted(Path(args.skills).glob("*/SKILL.md"))
+            if not paths:
+                print(f"FAIL: no skill files found under {args.skills}")
+                return 1
+            for path in paths:
+                skill = path.parent.name
+                blocks = [b for b in re.findall(r"```bash\n(.*?)```", path.read_text(), re.S)
+                          if "git " not in b and "install.sh" not in b]
+                checks = CHECKS.get(skill)
+                if checks is None:
+                    print(f"FAIL {skill}: no checks defined")
                     failures += 1
-                    print(f"FAIL {skill} block {index}: {error!r}\n  stdout: {proc.stdout[:600]}\n  stderr: {proc.stderr[:600]}")
+                    continue
+                if len(blocks) != len(checks):
+                    print(f"FAIL {skill}: {len(blocks)} runnable blocks but {len(checks)} checks")
+                    failures += 1
+                    continue
+                for index, (block, pair) in enumerate(zip(blocks, checks)):
+                    check = pair[1] if args.mock else pair[0]
+                    block_work = work / f"{skill}-{index}"
+                    block_work.mkdir()
+                    proc = None
+                    block_env = dict(env, TMPDIR=str(block_work))
+                    try:
+                        proc = subprocess.run(["bash", "-c", example_command(skill, block, block_work)], capture_output=True,
+                                              text=True, env=block_env, cwd=block_work, timeout=120)
+                        check(objects(proc.stdout), proc.returncode)
+                        passes += 1
+                        print(f"PASS {skill} block {index} (exit {proc.returncode})")
+                    except subprocess.TimeoutExpired:
+                        failures += 1
+                        print(f"FAIL {skill} block {index}: timed out after 120 seconds")
+                    except Exception as error:  # noqa: BLE001 - report every failure, keep going
+                        failures += 1
+                        detail = f"\n  stdout: {proc.stdout[:600]}\n  stderr: {proc.stderr[:600]}" if proc else ""
+                        print(f"FAIL {skill} block {index}: {error!r}{detail}")
     finally:
         if mock is not None:
-            mock.terminate()
-            mock.wait(timeout=5)
+            mock.shutdown()
+            mock.server_close()
     print(f"{'mock' if args.mock else 'no-key'} mode: {passes} passed, {failures} failed")
     return 1 if failures else 0
 

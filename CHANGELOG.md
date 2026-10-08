@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Preserve adopted/modified upstream checkouts during uninstall, reject dirty updates and unsafe linked skill paths, and make custom installer/manifest paths reliable.
+- Isolate offline verification from stored credentials, external APIs and production state; tighten the loopback mock's request/response contract and error handling.
+- Embed a pinned-CLI response validator in the launcher: cap confidence using the probability distribution, reject incomplete Score spreads and turn oversized numeric replies into normal error/fallback results.
+- Use private temporary files and stop on command errors in skill examples. Preserve source evidence, original approval/notification policies and transcript constraints when using classifications or lossy digests.
+- Correct provider-preference, outbound metadata, redaction, state-path and billing-limit claims for the pinned CLI. Document offline verification limits without promising live accuracy or performance.
+
 ## [0.1.0] - 2026-10-06
 
 ### Added
